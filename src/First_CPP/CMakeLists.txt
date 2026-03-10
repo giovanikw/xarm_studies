@@ -10,13 +10,14 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(visualization_msgs REQUIRED)
-
+find_package(moveit_ros_planning_interface REQUIRED)
 #create and link
 add_executable(First_CPP_nd src/First_CPP_nd.cpp)
 
 ament_target_dependencies(First_CPP_nd 
   rclcpp 
   visualization_msgs 
+  moveit_ros_planning_interface
 )
 
 target_include_directories(First_CPP_nd PUBLIC

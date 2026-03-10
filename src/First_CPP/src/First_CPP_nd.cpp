@@ -5,6 +5,9 @@
 #include <memory>
 #include <string>
 
+#include <moveit/move_group_interface/move_group_interface.h>
+#include <geometry_msgs/msg/pose_stamped.hpp>
+
 
 
 #include "rclcpp/rclcpp.hpp"
@@ -85,9 +88,15 @@ class MarkerPublisher : public rclcpp::Node
 
     }
   
+  void move_Arm()
+  {
+    auto move_group_interface = moveit::planning_interface::MoveGroupInterface(arm_pub, "xarm_move_group");
+  }
+  
     rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr marker_pub_;
     rclcpp::TimerBase::SharedPtr timer_;
-};
+    rclcpp::Publisher<moveit::move_group_interface::geometry_msgs>::SharedPtr arm_pub;
+    };
 
 int main(int argc, char ** argv)
 {
