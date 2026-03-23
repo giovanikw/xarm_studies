@@ -1,12 +1,13 @@
 #include <cstdio>
 #include <random>
+#include <string.h>
 #include <chrono>
 #include <functional>
 #include <memory>
 #include <string>
 
 #include <moveit/move_group_interface/move_group_interface.h>
-
+using moveit::planning_interface::MoveGroupInterface;
 
 
 #include <geometry_msgs/msg/pose_stamped.hpp>
@@ -32,8 +33,8 @@ class MarkerPublisher : public rclcpp::Node
 
 
       RCLCPP_INFO(this->get_logger(), "Node has been initialized");
-      timer_ = this->create_wall_timer(2000ms, std::bind(&MarkerPublisher::publish_marker, this));
-
+      timer_ = this->create_wall_timer(10000ms, std::bind(&MarkerPublisher::publish_marker, this));
+      
     }
 
   private:
@@ -109,23 +110,70 @@ class ArmPublisher
     ArmPublisher()
     : Node("arm_publisher")
     {
-    //   arm_pub_= this->create_publisher<moveit_msgs::msg::Pose>("armPA", 10);
+      arm_pub_= this->create_publisher<geometry_msgs::msg::Pose>("armPA", 10);
+      arm_pub_test_= this->create_publisher<visualization_msgs::msg::Marker>("armPubTest", 10);
+      arm_goal_= this->create_subscription<visualization_msgs::msg::Marker>("markerPA", 10, std::bind(&ArmPublisher::MoveArm, this, std::placeholders::_1));
+      RCLCPP_INFO(this->get_logger(), "Arm Node initialized");
     }
 
   private:
-    void MoveArm()
+    void MoveArm(const visualization_msgs::msg::Marker::SharedPtr goalmsg)
     {
-      ;
+
+      auto move_group_interface = MoveGroupInterface(shared_from_this(), "manipulator");
+      
+      visualization_msgs::msg::Marker goal = *goalmsg;
+      
+      arm_pub_test_->publish(goal);
+      
+      auto const target_pose= [&goal] {
+      geometry_msgs::msg::Pose msg;
+        msg.orientation.w = 1.0;
+        msg.position.x =  0.5;  //goal.pose.position.x;
+        msg.position.y =  0.5;  //goal.pose.position.y;
+        msg.position.z =  0.5;  //goal.pose.position.z;
+        return msg;
+     }();
+    move_group_interface.setPoseTarget(target_pose);
+
+    // Create a plan to that target pose
+    auto const [success, plan] = [&move_group_interface]{
+      moveit::planning_interface::MoveGroupInterface::Plan msg;
+      auto const ok = static_cast<bool>(move_group_interface.plan(msg));
+      return std::make_pair(ok, msg);
+    }();
+
+    // Execute the plan
+    if(success) {
+      move_group_interface.execute(plan);
+    } else {
+      RCLCPP_INFO(this->get_logger(), "Planning failed!");
+    }
+
+
+
     };
-    rclcpp::Publisher<moveit_msgs::msg::Grasp_>::SharedPtr arm_pub_;
-};
-
-
+    rclcpp::Publisher<geometry_msgs::msg::Pose>::SharedPtr arm_pub_;
+    rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr arm_pub_test_;
+    rclcpp::Subscription<visualization_msgs::msg::Marker>::SharedPtr arm_goal_;
+  };
 
 int main(int argc, char ** argv)
 {
   rclcpp::init(argc, argv);
-  rclcpp::spin(std::make_shared<MarkerPublisher>());
+
+  std::shared_ptr<MarkerPublisher> marker_node = std::make_shared<MarkerPublisher>();
+  std::shared_ptr<ArmPublisher> arm_node = std::make_shared<ArmPublisher>();
+
+
+
+  rclcpp::executors::MultiThreadedExecutor executor;
+  executor.add_node(marker_node);
+  executor.add_node(arm_node);
+  // The spin() call is blocking and will process all callbacks until shutdown is called
+  executor.spin();
+
+  // rclcpp::spin(std::make_shared<Maininit>());
   rclcpp::shutdown();
   return 0;
 
